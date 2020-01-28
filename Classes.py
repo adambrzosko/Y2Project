@@ -6,23 +6,29 @@ Ball class for Y2 Proj
 """
 import numpy as np
 import pylab as pl
+import random as rand
 
 class Ball:
     ballNo = 0
     
-    def __init__(self,m=1,R=1,r=np.array([0,0]),v=np.array([0,0]), Patch = True):
+    def __init__(self,m=1,R=1,r=np.array([0,0]),v=np.array([0,0]), container=False):
         self._mass = m
         self._rad = R
         self._pos = np.array(r)
         self._vel = np.array(v)
         Ball.ballNo +=1
-        if Patch == True:
-            patch = pl.Circle(r, R, fc='r')
-            ax = pl.axes(xlim=(-10, 10), ylim=(-10, 10))
-            ax.add_patch(patch)
+        if container == True:
+            Ball.ballNo -=1
+            self._mass = float('inf')
+            self._rad = -Simulation.volume
+            self._pos = np.array([0,0])
+            self._vel = np.array([0,0])
         
     def __repr__(self):
         return 'Ball of mass %s, radius %s, velocity %s, at %s' % (self._mass, self._rad, self._vel, self._pos)
+    
+    def mass(self):
+        return self._mass
     
     def pos(self):
         return self._pos
@@ -31,7 +37,7 @@ class Ball:
         return self._vel
     
     def move(self,dt):
-        self._pos = self._pos + dt*self._vel
+        self._pos = self._pos + dt*self._vel - np.array([0.000001,0.000001])
         return self._pos
         
     def time_to_collision(self, other):
@@ -41,13 +47,16 @@ class Ball:
         a = np.dot(v,v)
         b = 2*np.dot(r,v)
         c = (np.dot(r,r) - (R**2))
-        if other._mass == float('inf'):
-            return ((-b)+np.sqrt((b**2)-(4*a*c)))/(2*a)
-        elif b**2 - (4*a*c) == 0: 
+        det = b**2 - (4*a*c)
+        if a==0: 
+            return float('inf')
+        elif other._mass == float('inf'):
+            return ((-b)+np.sqrt(det))/(2*a)
+        elif det == 0 and b < 0: 
             return (-b)/(2*a)
-        elif b**2 - (4*a*c) > 0 and b < 0 :
-            return  ((-b)-np.sqrt((b**2)-(4*a*c)))/(2*a)
-        else: raise Exception ("No collision")
+        elif det > 0 and b < 0:
+            return  ((-b)-np.sqrt(det))/(2*a)
+        else: return float('inf')
     
     def collide(self, other):
         '''change vel components parallel to the axis
@@ -83,22 +92,75 @@ class Ball:
         self._vel = new_vel_self
         other._vel = new_vel_other      #change the componenets
         
+    def get_patch(self):
+        p = pl.Circle(self._pos, self._rad, fc='r')
+        return p
+
+'''
+class Gas:
+    def __init__(self, NoB):
+        self._NoB = 1'''
+
+class Simulation:
+    ball_list = []
+    volume = 20
+    
+    def __init__(self,m=1,R=1,r=np.array([0,0]),v=np.array([0,0]), container=False, NoB=1):
+        self._NoB = 3
+        self._container = Ball(container=True)
+        x = []
+        y = []
+        for i in range(-10,10,2):    #sqrt of half of the square of radius
+            x.append(i)
+            y.append(i)
+        for i in range(self._NoB):
+            pos_x = rand.choice(x)
+            pos_y = rand.choice(y)
+            Simulation.ball_list.append(Ball(r= np.array([pos_x,pos_y]), v=np.array([rand.choice(x),rand.choice(y)])))
+            x.pop(int((pos_x+10)/2))  #not sure if element of given index or given element (possibly shift by half the list)
+            y.pop(int((pos_y+10)/2))
+
+    def next_collision(self):
+        t = float('inf')
+        tb = []
+        for k in range(self._NoB):
+            for i in range(k+1, self._NoB):
+                tb.append(Simulation.ball_list[k].time_to_collision(Simulation.ball_list[i]))
+                tc = Simulation.ball_list[k].time_to_collision(self._container)
+                if tb[i-1] < t and tb[i-1] < tc:
+                    t = tb[i-1]
+                    ball1_id = k
+                    ball2_id = i
+                    print(k,i)
+                elif tc < t:
+                    t = tc
+                    ball1_id = k
+                    ball2_id = i
+                    print(k,i)
+        for i in range(self._NoB):
+            Simulation.ball_list[i].move(t)
+        print(ball1_id, ball2_id)
+        print(t)     
+        Simulation.ball_list[ball1_id].collide( Simulation.ball_list[ball2_id])
+         
         
-class Simulation(Ball):
-    
-    def __init__(self,m=1,R=1,r=np.array([0,0]),v=np.array([0,0]), Patch = True):
-        self._mass = m
-        self._rad = R
-        self._pos = np.array(r)
-        self._vel = np.array(v)
-        Ball.__init__(self,m,R,r,v)
-        if Patch == True:
-            patch = pl.Circle([0., 0.], 10, ec='b', fill=False, ls='solid')
-            ax = pl.axes(xlim=(-10, 10), ylim=(-10, 10))
-            ax.add_patch(patch)
-    
-    def next_collision(self, other): 
-        t = self.time_to_collision(other)
-        self.move(t)
-        other.move(t)
-        self.collide(other)
+    def run(self, num_frames, animate=False):
+        if animate:
+            ax = pl.axes(xlim=(-Simulation.volume, Simulation.volume), ylim=(-Simulation.volume, Simulation.volume))
+            ax.add_artist(pl.Circle([0., 0.], Simulation.volume, ec='b', fill=False, ls='solid'))
+            p = []
+            for i in range(self._NoB):
+                p.append(ax.add_patch(Simulation.ball_list[i].get_patch()))
+        for frame in range(num_frames):
+            self.next_collision()
+            '''Energy = (self._ball._mass*np.dot(self._ball._vel, self._ball._vel))/2
+            print(Energy)
+            Pressure = (Energy)/(np.pi*(self._container._rad)**2)
+            print(Pressure)'''
+            if animate:
+                for i in range(self._NoB):
+                    p[i].center = (Simulation.ball_list[i]._pos)
+                    print(p[i])
+                    pl.pause(0.001)
+
+
