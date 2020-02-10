@@ -1,12 +1,14 @@
 # -*- coding: utf-8 -*-
 """
 Adam Brzosko
-Ball class for Y2 Proj
+File containing classes (ball and simulation)
+for Y2 Project
 """
 import numpy as np
 import pylab as pl
 import random as rand
 import math
+import pickle
 
 class Ball:
     ballNo = 0
@@ -95,9 +97,8 @@ class Ball:
 
 class Simulation:
     ball_list = []
-    volume = 20 #this is actually the radius
+    volume = 30 #this is actually the radius
     pressure_hits = []
-    T = 0
     ball1_id = 0  #collision ball ids
     ball2_id = 0
     Container_collision = True
@@ -105,7 +106,7 @@ class Simulation:
     tb = []  #ball collisions list
     cb = []  #collision ball ids
     def __init__(self,m=1,R=1,r=np.array([0,0]),v=np.array([0,0]), container=False, NoB=1):
-        self._NoB = 50  #maximum is (f^2)/(3^2), which is just a smaller square than half of square of radius / (3)^2 
+        self._NoB = 150  #maximum is (f^2)/(3^2), which is just a smaller square than half of square of radius / (3)^2 
         self._container = Ball(container=True)
         f = math.floor(np.sqrt(0.5*(Simulation.volume**2)))-1
         size = range(-f,f,3*R)  #sqrt of half of the square of (radius minus one) (size of possible grid)
@@ -192,6 +193,7 @@ class Simulation:
         t_cont = min(Simulation.tc)   
         if t_ball < t_cont:
             Simulation.Container_collision = False
+            Simulation.pressure_hits.append(0)
             Simulation.ball1_id = Simulation.tb.index(t_ball)   #get coliding ball numbers
             Simulation.ball2_id = Simulation.cb[Simulation.ball1_id]
             for i in range(self._NoB):
@@ -207,37 +209,36 @@ class Simulation:
                 Simulation.ball_list[i].move(t_cont) #move all the balls
                 Simulation.tb[i] = Simulation.tb[i] - t_cont #increment all the times
                 Simulation.tc[i] = Simulation.tc[i] - t_cont
+            Simulation.pressure_hits.append((2*Simulation.ball_list[Simulation.ball1_id]._mass*np.sqrt(abs(np.dot(Simulation.ball_list[Simulation.ball1_id]._vel,Simulation.ball_list[Simulation.ball1_id]._vel))))/(2*np.pi*Simulation.volume))
             Simulation.ball_list[Simulation.ball1_id].collide(self._container)
             print('ball', Simulation.ball1_id, 'collides with container')  
             
     def run(self, num_frames, animate=False):
+        if self._NoB > 150:
+            raise Exception('Too many particles')
         if animate:
             ax = pl.axes(xlim=(-Simulation.volume, Simulation.volume), ylim=(-Simulation.volume, Simulation.volume))
             ax.add_artist(self._container.get_patch())
             p = []
             for i in range(self._NoB):
                 p.append(ax.add_patch(Simulation.ball_list[i].get_patch()))
-        dist_list = []
-        centr_list = []
-        tot_energy_list = []
-        tot_momentum_list = []
         velocities = []
+        masses = []
         self.next_collision_initial()
-        pl.pause(0.000001)
         for frame in range(num_frames-1):
-            energy_list = []
-            momenta = []
             for i in range(self._NoB):
-                centr_list.append(np.sqrt(np.dot(Simulation.ball_list[i].pos(),Simulation.ball_list[i].pos())))
-                energy_list.append((Simulation.ball_list[i]._mass*np.dot(Simulation.ball_list[i]._vel, Simulation.ball_list[i]._vel))/2)
-                momenta.append(Simulation.ball_list[i]._mass*Simulation.ball_list[i]._vel)
-                velocities.append(Simulation.ball_list[i]._vel)
-                for k in range(self._NoB):
-                    if k != i:
-                        dist_list.append(np.sqrt(abs(np.dot(Simulation.ball_list[i].pos(),Simulation.ball_list[k].pos()))))
-            tot_energy_list.append(sum(energy_list))
-            tot_momentum_list.append(sum(momenta))
+                masses.append(Simulation.ball_list[i].mass())
+                velocities.append(Simulation.ball_list[i].vel())
             self.next_collision_main()
-
             if animate:
                     pl.pause(0.000001)
+
+        with open('masses.data', 'wb') as filehandle:
+            pickle.dump(masses, filehandle)
+        with open('velocities.data', 'wb') as filehandle:
+            pickle.dump(velocities, filehandle)
+        with open('instantenous_pressure.data', 'wb') as filehandle:
+            pickle.dump(Simulation.pressure_hits, filehandle)
+
+
+        
