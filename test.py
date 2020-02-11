@@ -150,6 +150,7 @@ class Simulation:
 
 I = Simulation()
 I.run(20, True)
+'''Animation doesn't work properly'''
 #%%
 '''Improved simulation class. The initilisaion method is more efficient.
 The run method now fixed. Added plots for kinetic energy,
@@ -486,6 +487,7 @@ class Simulation:
         
 I = Simulation()
 I.run(100, True)
+'''Bad implementation, starting again...'''
 #%%
 '''Now properly implemented the time calculation optimisation.'''
 import math
@@ -785,7 +787,7 @@ ordinarily (step 1). The index of each c list has to be divided
 by 3*radius as well to bring them down to ordinary indexing.'''
 
 #%%
-'''Investigating storing large amount of data in a txt file.'''
+'''Investigating storing large amount of data in a data file.'''
 import pickle
 
 class Simulation:
@@ -964,13 +966,14 @@ class Simulation:
             pickle.dump(bolts, filehandle)
 I = Simulation()
 I.run(1000, True)
+'''works well'''
 #%%
 '''Now loading the data and plotting a graph.'''
 with open('listfile.data', 'rb') as filehandle:
     # read the data as binary data stream
     bolts = pickle.load(filehandle)
 
-del bolts[:900*40]  #ignore first 200 frames for all 40 balls
+del bolts[:200*40]  #ignore first 200 frames for all 40 balls
 
 boltzmann = plt.figure()
 ax1 = boltzmann.add_subplot(1, 1, 1)
@@ -979,4 +982,230 @@ plt.title('Maxwell-Boltzmann distribution for our gas')
 ax1.set_xlabel('Energy of a molecule')
 ax1.set_ylabel('Number of instances')
 plt.show()
+
+#%%
+'''Speed comparison between original and optimised 
+algorithms.'''
+import timeit
+from functools import partial
+from matplotlib import pyplot
+
+
+class Simulation_Original:
+    ball_list = []
+    volume = 30
+    tc = []  
+    tb = []  
+    cb = []  
+    def __init__(self,NoB=1,m=1,R=1,r=np.array([0,0]),v=np.array([0,0]), container=False):
+        self._NoB = 11  
+        self._container = Ball(container=True)
+        f = math.floor(np.sqrt(0.5*(Simulation.volume**2)))-1
+        size = range(-f,f,3*R)  
+        vx = []
+        for i in range(-2*f,2*f):       
+            vx.append(i)
+            vy = vx.copy()
+        a = []
+        b = []
+        for i in size:
+            a.append(i)
+        for j in size:
+            c = a.copy()
+            c.append(j/(3*R))
+            b.append(c)
+        for k in range(self._NoB):
+            x = rand.choice(b) 
+            while len(x) == 1:
+                x = rand.choice(b)
+            pos_x = b.index(x)
+            x.pop()
+            pos_y = rand.choice(x)
+            x.remove(pos_y)
+            x.append(pos_x)
+            Simulation.ball_list.append(Ball(r= np.array([(3*R*pos_x)-f,pos_y]), v=np.array([2*rand.choice(vx),2*rand.choice(vy)])))
+
+    def next_collision(self):
+        tb = []
+        t = Simulation.ball_list[self._NoB-1].time_to_collision(self._container)
+        ball1_id = self._NoB-1    
+        Container_collision = True
+        for k in range(self._NoB-1):     
+            tc = Simulation.ball_list[k].time_to_collision(self._container)  
+            for i in range(k+1, self._NoB): 
+                tb.append(Simulation.ball_list[k].time_to_collision(Simulation.ball_list[i]))
+                if tb != [] and tb[i-k-1] < t and tb[i-k-1] < tc and tb[i-k-1] > 1e-15:
+                    t = tb[i-k-1]
+                    ball1_id = k
+                    ball2_id = i
+                    Container_collision = False
+                elif tc < t and tc > 1e-15:
+                    t = tc
+                    ball1_id = k
+                    Container_collision = True
+            tb = []
+        for i in range(self._NoB):
+            Simulation.ball_list[i].move(t)
+        if Container_collision == False:
+            Simulation.ball_list[ball1_id].collide(Simulation.ball_list[ball2_id])
+        else:
+           Simulation.ball_list[ball1_id].collide(self._container)
+        
+    def run(self, num_frames, animate=False):
+        if animate:
+            ax = pl.axes(xlim=(-Simulation.volume, Simulation.volume), ylim=(-Simulation.volume, Simulation.volume))
+            ax.add_artist(self._container.get_patch())
+            p = []
+            for i in range(self._NoB):
+                p.append(ax.add_patch(Simulation.ball_list[i].get_patch()))
+        for frame in range(num_frames):
+            self.next_collision()
+            if animate:
+                    pl.pause(0.001)
+
+class Simulation_Optimised:
+    ball_list = []
+    volume = 30 
+    ball1_id = 0  
+    ball2_id = 0
+    Container_collision = True
+    tc = []  
+    tb = []  
+    cb = []  
+    def __init__(self,m=1,R=1,r=np.array([0,0]),v=np.array([0,0]), container=False, NoB=1):
+        self._NoB = 11
+        self._container = Ball(container=True)
+        f = math.floor(np.sqrt(0.5*(Simulation.volume**2)))-1
+        size = range(-f,f,3*R)  
+        vx = []
+        for i in size:       
+            vx.append(i)
+            vy = vx.copy()
+        a = []
+        b = []
+        for i in size:     
+            a.append(i)
+        for j in size:
+            c = a.copy()
+            c.append(j/(3*R))
+            b.append(c)
+        for k in range(self._NoB):
+            x = rand.choice(b) 
+            while len(x) == 1:
+                x = rand.choice(b)
+            pos_x = b.index(x)
+            x.pop()
+            pos_y = rand.choice(x)
+            x.remove(pos_y)
+            x.append(pos_x)
+            Simulation.ball_list.append(Ball(r= np.array([(3*R*pos_x)-f,pos_y]), v=np.array([rand.choice(vx),rand.choice(vy)])))
+    def next_collision_initial(self):
+        for k in range(self._NoB):
+            tck = Simulation.ball_list[k].time_to_collision(self._container)
+            Simulation.tc.append(tck)
+            tbk = []
+            for i in range(self._NoB):
+                time = Simulation.ball_list[k].time_to_collision(Simulation.ball_list[i])
+                tbk.append(time)
+            tbk_min = min(tbk) 
+            Simulation.tb.append(tbk_min)
+            Simulation.cb.append(tbk.index(tbk_min))
+        t_cont_min = min(Simulation.tc)
+        t_ball_min = min(Simulation.tb)
+        if t_cont_min < t_ball_min:
+            t = t_cont_min
+            Simulation.Container_collision = True
+            Simulation.ball1_id = Simulation.tc.index(t_cont_min)
+        else:
+            t = t_ball_min
+            Simulation.Container_collision = False
+            Simulation.ball1_id = Simulation.tb.index(t_ball_min)
+            Simulation.ball2_id = Simulation.cb[Simulation.ball1_id]
+        for i in range(self._NoB):
+            Simulation.ball_list[i].move(t) 
+            Simulation.tb[i] = Simulation.tb[i] - t
+            Simulation.tc[i] = Simulation.tc[i] - t
+        if Simulation.Container_collision == False:
+            Simulation.ball_list[Simulation.ball1_id].collide(Simulation.ball_list[Simulation.ball2_id])
+        else:
+           Simulation.ball_list[Simulation.ball1_id].collide(self._container)
+    def next_collision_main(self):
+        tb1 = []
+        tb2 = []
+        if Simulation.Container_collision == True:
+            for i in range(self._NoB):
+                tb1.append(Simulation.ball_list[Simulation.ball1_id].time_to_collision(Simulation.ball_list[i])) 
+            t = min(tb1)
+            Simulation.tb[Simulation.ball1_id] = t   
+            Simulation.cb[Simulation.ball1_id] = tb1.index(t)
+            Simulation.tc[Simulation.ball1_id] = Simulation.ball_list[Simulation.ball1_id].time_to_collision(self._container) 
+        else:
+            for i in range (self._NoB):
+                tb1.append(Simulation.ball_list[Simulation.ball1_id].time_to_collision(Simulation.ball_list[i])) 
+                tb2.append(Simulation.ball_list[Simulation.ball2_id].time_to_collision(Simulation.ball_list[i]))
+            t1 = min(tb1)
+            t2 = min(tb2)
+            Simulation.tb[Simulation.ball1_id] = t1
+            Simulation.cb[Simulation.ball1_id] = tb1.index(t1)
+            Simulation.tb[Simulation.ball2_id] = t2
+            Simulation.cb[Simulation.ball2_id] = tb2.index(t2)
+            Simulation.tc[Simulation.ball1_id] = Simulation.ball_list[Simulation.ball1_id].time_to_collision(self._container)
+            Simulation.tc[Simulation.ball2_id] = Simulation.ball_list[Simulation.ball2_id].time_to_collision(self._container)
+        t_ball = min(Simulation.tb) 
+        t_cont = min(Simulation.tc)   
+        if t_ball < t_cont:
+            Simulation.Container_collision = False
+            Simulation.ball1_id = Simulation.tb.index(t_ball)   
+            Simulation.ball2_id = Simulation.cb[Simulation.ball1_id]
+            for i in range(self._NoB):
+                Simulation.ball_list[i].move(t_ball) 
+                Simulation.tb[i] = Simulation.tb[i] - t_ball
+                Simulation.tc[i] = Simulation.tc[i] - t_ball
+            Simulation.ball_list[Simulation.ball1_id].collide(Simulation.ball_list[Simulation.ball2_id])
+        else:
+            Simulation.Container_collision = True
+            Simulation.ball1_id = Simulation.tc.index(t_cont)
+            for i in range(self._NoB):
+                Simulation.ball_list[i].move(t_cont) 
+                Simulation.tb[i] = Simulation.tb[i] - t_cont 
+                Simulation.tc[i] = Simulation.tc[i] - t_cont
+            Simulation.ball_list[Simulation.ball1_id].collide(self._container)
+            
+    def run(self, num_frames, animate=False):
+        if self._NoB > 150:
+            raise Exception('Too many particles')
+        if animate:
+            ax = pl.axes(xlim=(-Simulation.volume, Simulation.volume), ylim=(-Simulation.volume, Simulation.volume))
+            ax.add_artist(self._container.get_patch())
+            p = []
+            for i in range(self._NoB):
+                p.append(ax.add_patch(Simulation.ball_list[i].get_patch()))
+        self.next_collision_initial()
+        for frame in range(num_frames-1):
+            self.next_collision_main()
+            if animate:
+                    pl.pause(0.000001)
+
+def plotTC(fn, nMin, nMax, nInc, nTests):
+    """
+    Run timer and plot time complexity
+    """
+    x = []
+    y = []
+    for i in range(nMin, nMax, nInc):
+        N = i
+        testNTimer = timeit.Timer(partial(fn, N))
+        t = testNTimer.timeit(number=nTests)
+        x.append(i)
+        y.append(t)
+        pyplot.plot(x, y, 'o')
+
+I1 = Simulation_Original(NoB=11)
+I2 = Simulation_Optimised(NoB=11)
+plotTC(I1.run, 1, 100, 10, 1)
+plotTC(I2.run, 1, 100, 10, 1)
+pyplot.title("Speed comparison for time calculation algorithms")
+pyplot.xlabel("Number of frames")
+pyplot.ylabel("Time")
+pyplot.show()
 
