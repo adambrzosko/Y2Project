@@ -1,4 +1,4 @@
-Welcome to a Python simulation of ideal gas law. The work contains three files: "Main", "Classes" and "tests". "Main" contains a code which will output data based on a number of parameters that can be set. "Classes" contains the module with classes needed to run the simulation. Please do not alter anything inside it! "tests" contains snippets of code that were used to design the bulk of the code. These may not be functional anymore, and are there just to demonstrate the development process.
+Welcome to a Python simulation of ideal gas law. The work contains two files: "Main" and "Classes". "Main" contains a code which will output data based on a number of parameters that can be set. "Classes" contains the module with classes needed to run the simulation. Please do not alter anything inside it!
 
 
 To run the simulation, please first run the "Classes" file.
